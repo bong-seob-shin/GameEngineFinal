@@ -36,14 +36,16 @@ public class PlayerMove : MonoBehaviour
     private float lookSensitivity;
 
 
-    [Tooltip("카메라 한계")]
-    [SerializeField]
-    private float cameraRotationLimit = 45.0f;
-    private float currentCameraRotationX = 0;
-
     [SerializeField]
     private Camera theCamera;
-    
+    public Transform CameraArm;
+
+
+    public Animator animator; 
+
+    [SerializeField]
+    private Transform player;
+
     //땅 착지여부
     private CapsuleCollider playerCollider;
 
@@ -55,7 +57,7 @@ public class PlayerMove : MonoBehaviour
         playerRb = GetComponent<Rigidbody>();
         playerCollider = GetComponent<CapsuleCollider>();
         applySpeed = walkSpeed;
-        originPosY = theCamera.transform.localPosition.y;
+        originPosY = CameraArm.transform.localPosition.y;
         applyCouchPosY = originPosY;
     }
 
@@ -65,52 +67,71 @@ public class PlayerMove : MonoBehaviour
 
         IsGround();
         TryCrouch();
-        TryJump();
         TryRun();
+        TryJump();
         Move();
-        CameraRotation();
-        CharacterRotation();
+        LookAround();
+        //CameraRotation();
+        //CharacterRotation();
     }
 
     private void Move()
     {
-        float moveDirX = Input.GetAxisRaw("Horizontal");
-        float moveDirZ = Input.GetAxisRaw("Vertical");
+        Vector2 moveInput = new Vector2(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
 
-        Vector3 moveHorizontal = transform.right * moveDirX;
-        Vector3 moveVertical = transform.forward * moveDirZ;
+        bool isMove = moveInput.magnitude != 0;
 
-        Vector3 veclocity = (moveHorizontal + moveVertical).normalized* applySpeed;
+        if (isMove)
+        {
+            animator.SetBool("GunWalk", true);
 
-        playerRb.MovePosition(transform.position + veclocity * Time.deltaTime);
+            Vector3 lookForward = new Vector3(CameraArm.forward.x, 0f, CameraArm.forward.z).normalized;
+            Vector3 lookRight = new Vector3(CameraArm.right.x, 0f, CameraArm.right.z).normalized;
+            Vector3 moveDir = lookForward * moveInput.y + lookRight * moveInput.x;
+
+            player.forward = moveDir;
+            transform.position += moveDir * Time.deltaTime * applySpeed;
+        }
+        else
+        {
+            animator.SetBool("GunWalk", false);
+
+        }
+
+
     }
 
-    private void CameraRotation()
-    {
-        float xRotation = Input.GetAxisRaw("Mouse Y");//카메라의 시야는 2d이므로 2차원이다 그래서 x축은 마우스Y이다.
-        float cameraRotationX = xRotation * lookSensitivity;
-        currentCameraRotationX -= cameraRotationX;//+를하면 마우스올리면 밑으로내려가고 이런식
-        currentCameraRotationX = Mathf.Clamp(currentCameraRotationX, -cameraRotationLimit, cameraRotationLimit);
+  
 
-        theCamera.transform.localEulerAngles = new Vector3(currentCameraRotationX, 0f, 0f);
-    }
-
-    private void CharacterRotation()
+    private void LookAround()
     {
-        float yRotaion = Input.GetAxisRaw("Mouse X");
-        Vector3 characterRotationY = new Vector3(0f, yRotaion, 0f) * lookSensitivity;
-        playerRb.MoveRotation(playerRb.rotation * Quaternion.Euler(characterRotationY));
+        Vector2 mouseDelta = new Vector2(Input.GetAxis("Mouse X"), Input.GetAxis("Mouse Y"));
+        Vector3 camAngle = CameraArm.rotation.eulerAngles;
+        float x = camAngle.x - mouseDelta.y;
+
+        if (x < 180f)
+        {
+            x = Mathf.Clamp(x, -1f, 70f);
+        }
+        else
+        {
+            x = Mathf.Clamp(x, 358f, 361f);
+        }
+        CameraArm.rotation = Quaternion.Euler(x, camAngle.y+mouseDelta.x, camAngle.z);
     }
 
     private void TryRun()
     {
-        if (Input.GetKey(KeyCode.LeftShift))
+        if (Input.GetKey(KeyCode.LeftShift)&&!isCrouch)
         {
             Running();
+            animator.SetBool("GunRun", true);
         }
-        if (Input.GetKeyUp(KeyCode.LeftShift))
+        if (Input.GetKeyUp(KeyCode.LeftShift)&&!isCrouch)
         {
             RunningCancle();
+            animator.SetBool("GunRun", false);
+
         }
     }
 
@@ -131,6 +152,7 @@ public class PlayerMove : MonoBehaviour
     {
         if(Input.GetKeyDown(KeyCode.Space)&& isGround)
         {
+            animator.SetBool("Jump", true);
             Jump();
         }
     }
@@ -141,13 +163,16 @@ public class PlayerMove : MonoBehaviour
         {
             Crouch();
         }
-        playerRb.velocity = transform.up * jumpForce;
+        playerRb.velocity = player.transform.up * jumpForce;
     }
 
     private void IsGround()
     {
-        isGround = Physics.Raycast(transform.position, Vector3.down, playerCollider.bounds.extents.y+0.1f);//고정적인 아래좌표를 위해서 벡터.다운사용 플레이어콜라이더의크기의y의반, 정확히 반을주면 오차때문에 문제생겨서 조금더준다.
-
+        isGround = Physics.Raycast(player.transform.position, Vector3.down, playerCollider.bounds.extents.y+0.1f);//고정적인 아래좌표를 위해서 벡터.다운사용 플레이어콜라이더의크기의y의반, 정확히 반을주면 오차때문에 문제생겨서 조금더준다.
+        if (isGround)
+        {
+            animator.SetBool("Jump", false);
+        }
     }
 
 
@@ -155,6 +180,7 @@ public class PlayerMove : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.LeftControl))
         {
+            RunningCancle();
             Crouch();
         }
     }
@@ -167,33 +193,36 @@ public class PlayerMove : MonoBehaviour
         {
             applySpeed = crouchSpeed;
             applyCouchPosY = crouchPosY;
+            animator.SetBool("Crouch", true);
+
         }
         else
         {
             applySpeed = walkSpeed;
             applyCouchPosY = originPosY;
+            animator.SetBool("Crouch", false);
 
         }
 
         StartCoroutine(CrouchCoRoutine());
     }
-
+   
    IEnumerator CrouchCoRoutine()
     {
-        float posY = theCamera.transform.localPosition.y;
+        float posY = CameraArm.transform.localPosition.y;
         int count = 0;
 
         while(posY != applyCouchPosY)
         {
             count++;
             posY = Mathf.Lerp(posY, applyCouchPosY, 0.3f);
-            theCamera.transform.localPosition = new Vector3(0, posY, 0);
+            CameraArm.transform.localPosition = new Vector3(0, posY, 0);
             if (count > 15)
             {
                 break;
             }
             yield return null;
         }
-        theCamera.transform.localPosition = new Vector3(0, applyCouchPosY, 0f);
+        CameraArm.transform.localPosition = new Vector3(0, applyCouchPosY, 0f);
     }
 }
