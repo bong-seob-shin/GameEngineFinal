@@ -23,7 +23,7 @@ public class PlayerMove : MonoBehaviour
     [Tooltip("상태 변수")]
     private bool isRun = false;
     private bool isGround = true;
-    private bool isCrouch = false;
+    public bool isCrouch = false;
 
     [Tooltip("얼마나 앉을건지")]
     [SerializeField]
@@ -51,6 +51,7 @@ public class PlayerMove : MonoBehaviour
 
 
     private Rigidbody playerRb;
+    
     // Start is called before the first frame update
     void Start()
     {
